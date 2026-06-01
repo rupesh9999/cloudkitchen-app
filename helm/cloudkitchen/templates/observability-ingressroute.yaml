@@ -1,0 +1,67 @@
+{{- if .Values.observability.enabled -}}
+# =============================================================================
+# Three IngressRoutes that expose the observability stack at sub-paths of the
+# same Traefik LB the app uses.
+#
+#   http://<host>/grafana/        -> monitoring-grafana:80           (Grafana)
+#   http://<host>/prometheus/     -> kube-prometheus-prometheus:9090 (Prometheus)
+#   http://<host>/alertmanager/   -> kube-prometheus-alertmanager:9093 (Alertmanager)
+#
+# All three Services live in the `monitoring` namespace (installed by the
+# kube-prometheus-stack chart via argocd/apps/app-monitoring.yaml).
+#
+# The host matcher is shared with the main IngressRoute — both .Values.ingress.host
+# and .Values.ingress.lbIP are accepted (so curl-by-IP debugging still works).
+# =============================================================================
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  entryPoints:
+    - {{ .Values.ingress.entryPoint }}
+  routes:
+    - match: (Host(`{{ .Values.ingress.host }}`) || Host(`{{ .Values.ingress.lbIP }}`)) && PathPrefix(`/grafana`)
+      kind: Rule
+      services:
+        - name: {{ .Values.observability.grafana.servicename }}
+          port: {{ .Values.observability.grafana.port }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  entryPoints:
+    - {{ .Values.ingress.entryPoint }}
+  routes:
+    - match: (Host(`{{ .Values.ingress.host }}`) || Host(`{{ .Values.ingress.lbIP }}`)) && PathPrefix(`/prometheus`)
+      kind: Rule
+      services:
+        - name: {{ .Values.observability.prometheus.servicename }}
+          port: {{ .Values.observability.prometheus.port }}
+---
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: alertmanager
+  namespace: monitoring
+  labels:
+    app: alertmanager
+spec:
+  entryPoints:
+    - {{ .Values.ingress.entryPoint }}
+  routes:
+    - match: (Host(`{{ .Values.ingress.host }}`) || Host(`{{ .Values.ingress.lbIP }}`)) && PathPrefix(`/alertmanager`)
+      kind: Rule
+      services:
+        - name: {{ .Values.observability.alertmanager.servicename }}
+          port: {{ .Values.observability.alertmanager.port }}
+{{- end }}
