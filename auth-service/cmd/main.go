@@ -3,6 +3,8 @@
 // It keeps the operational endpoints (/healthz, /readyz, /metrics) from the
 // skeleton and wires in the business layer: config, Postgres (schema-per-service
 // with embedded migrations), NATS broker, and the auth HTTP API.
+//
+// GitOps loop verification marker — see Phase 4d in docs/gcp/04-argocd-deploy.md.
 package main
 
 import (
