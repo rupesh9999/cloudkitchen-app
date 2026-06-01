@@ -32,15 +32,15 @@ spec:
               retention_period: 168h # 7 days
         promtail:
           enabled: true # DaemonSet that tails container logs on every node
-          # The loki-stack chart's default Promtail config points at
-          # http://<release>:3100  — i.e. 'http://logging:3100' here.
-          # But the actual Loki Service is 'logging-loki:3100' (the chart's
-          # template inserts a '-loki' suffix on the loki side but NOT on the
-          # promtail clients[].url default). Override explicitly so Promtail
-          # finds Loki and stops 'no such host' retries.
+          # The loki-stack chart's default Promtail config posts to
+          #   http://<release>:3100  =  'http://logging:3100'
+          # but the actual Loki Service is 'logging-loki:3100' (the chart's
+          # template adds a '-loki' suffix on the Loki side but NOT on the
+          # promtail.config.lokiAddress default). Override the
+          # lokiAddress key explicitly — that's the value the chart's
+          # promtail template substitutes into clients[].url.
           config:
-            clients:
-              - url: http://logging-loki:3100/loki/api/v1/push
+            lokiAddress: http://logging-loki:3100/loki/api/v1/push
         # Grafana is provided by the monitoring stack, so disable the bundled one
         # and add Loki as a Grafana datasource there instead.
         grafana:
