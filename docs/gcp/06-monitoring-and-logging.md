@@ -500,7 +500,117 @@ Each service should report ~hundreds–thousands of `http_requests_total`
    - Try query  `{namespace="cloudkitchen"}`  + Run.
    - You should see live logs streaming from every cloudkitchen pod.
 
-If all three of those work, **Phase 6 is done.**
+If all three of those work, the monitoring stack itself is fully functional.
+**Next step gives you per-service dashboards** — way more useful for daily
+debugging than the generic kube-prom-stack dashboards.
+
+---
+
+## Step 8 — Per-service dashboards (one per microservice)
+
+The chart ships ~20 generic Kubernetes dashboards (node/pod/namespace/etc.)
+but nothing app-aware. To debug a single microservice you want **one focused
+dashboard** with that service's RPS, errors, latency, pod CPU/mem, and live
+logs — all on one screen.
+
+Grafana auto-loads dashboards from any **ConfigMap labeled
+`grafana_dashboard: "1"`** (the kube-prom-stack chart enables a "sidecar"
+container that watches the cluster for this exact label). So the recipe is:
+
+> Generate one ConfigMap per service, each containing the dashboard JSON,
+> all labeled `grafana_dashboard: "1"`. `kubectl apply` them. Grafana
+> auto-loads them within ~30 s.
+
+### 8a — Generator script
+
+The repo ships a small Python generator at
+[observability/grafana-dashboards/generate.py](../../observability/grafana-dashboards/generate.py).
+It takes one dashboard template (10 panels × 5 rows: stats, traffic, latency,
+resources, logs) and emits 8 ConfigMaps — one per microservice — into a
+single multi-doc YAML.
+
+Run it:
+
+```bash
+cd observability/grafana-dashboards
+python3 generate.py > cloudkitchen-dashboards.yaml
+```
+
+### 8b — Each dashboard has 10 panels
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│  Requests/sec  │  Error rate %  │  p95 latency  │  Pods up           │  Row 1: stats
+├────────────────┴────────────────┼───────────────┴────────────────────┤
+│  Requests/sec  by status code   │  Requests/sec  by path (top 5)     │  Row 2: traffic
+├─────────────────────────────────┴────────────────────────────────────┤
+│             HTTP latency  (p50 / p95 / p99)                          │  Row 3: latency
+├─────────────────────────────────┬────────────────────────────────────┤
+│  CPU usage  (cores, per pod)    │  Memory  (MiB, per pod)            │  Row 4: resources
+├─────────────────────────────────┴────────────────────────────────────┤
+│             Logs  (Loki, filtered to this service)                   │  Row 5: logs
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+Auto-refreshes every 30 s; default range is "last 1 hour".
+
+The metric queries use the labels that the Gin Prometheus middleware
+already exposes (`service`, `method`, `path`, `status`) plus the cAdvisor
+`container_cpu_usage_seconds_total` / `container_memory_working_set_bytes`
+filtered by pod-name prefix. The logs panel queries Loki with
+`{namespace="cloudkitchen", app="<service>"}` — Promtail adds those labels
+automatically.
+
+### 8c — Apply
+
+```bash
+kubectl apply -f cloudkitchen-dashboards.yaml
+
+# Sanity:
+kubectl -n monitoring get cm -l grafana_dashboard=1
+# 8 grafana-dashboard-<service> ConfigMaps, plus the ~20 kube-prom-stack ones
+```
+
+### 8d — Verify in Grafana
+
+Wait ~30 s for the sidecar to load them, then either:
+
+**Option A — query the Grafana API directly:**
+
+```bash
+GRAFANA_PWD=$(kubectl -n monitoring get secret monitoring-grafana \
+  -o jsonpath='{.data.admin-password}' | base64 -d)
+
+curl -s -u "admin:${GRAFANA_PWD}" \
+  "http://vijaygiduthuri.in/grafana/api/search?type=dash-db&query=CloudKitchen" \
+  | python3 -m json.tool
+```
+
+You should see all 8 dashboards listed.
+
+**Option B — open in browser:**
+
+Each dashboard has a stable UID (`ck-<service>`):
+
+| Service              | URL                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------ |
+| auth-service         | http://vijaygiduthuri.in/grafana/d/ck-auth-service/cloudkitchen-auth-service         |
+| user-service         | http://vijaygiduthuri.in/grafana/d/ck-user-service/cloudkitchen-user-service         |
+| restaurant-service   | http://vijaygiduthuri.in/grafana/d/ck-restaurant-service/cloudkitchen-restaurant-service |
+| menu-service         | http://vijaygiduthuri.in/grafana/d/ck-menu-service/cloudkitchen-menu-service         |
+| order-service        | http://vijaygiduthuri.in/grafana/d/ck-order-service/cloudkitchen-order-service       |
+| payment-service      | http://vijaygiduthuri.in/grafana/d/ck-payment-service/cloudkitchen-payment-service   |
+| delivery-service     | http://vijaygiduthuri.in/grafana/d/ck-delivery-service/cloudkitchen-delivery-service |
+| notification-service | http://vijaygiduthuri.in/grafana/d/ck-notification-service/cloudkitchen-notification-service |
+
+### 8e — How to customize (or add a new service)
+
+The template lives in `generate.py`'s `dashboard()` function — modify panels
+there, then re-run the generator. **To add a 9th service:** add its name
+to the `SERVICES = [...]` list at the top and re-run.
+
+If you change a dashboard, `kubectl apply` the regenerated YAML — Grafana
+sidecar detects the ConfigMap change and reloads within ~30 s.
 
 ---
 
