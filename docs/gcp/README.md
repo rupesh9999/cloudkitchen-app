@@ -63,7 +63,7 @@ previous one.
 | **2** | [Traefik ingress controller](02-traefik-ingress.md)  | Public entrypoint into the cluster         | ~5 min   | Traefik pods (in `traefik` ns) + a GCP TCP LoadBalancer + an external IP                                           |
 | **3** | [GitHub Actions CI](03-github-actions-cicd.md)       | Build & push images to Artifact Registry   | ~15 min  | GitHub secrets, first green CI run (after Trivy CVE iterations), images in AR with `:<short-sha>` + `:latest` tags |
 | **4** | [ArgoCD deploys the app](04-argocd-deploy.md)        | GitOps deployment from this repo           | ~15 min  | ArgoCD installed; UI under `/argocd`; the `cloudkitchen` Application Synced + Healthy; 12 pods Running             |
-| **5** | (next) DNS + domain                                  | Point your domain at the LB IP             | TBD      | DNS A record → LB IP, smoke-test via hostname                                                                      |
+| **5** | [DNS + GoDaddy](05-dns-and-godaddy.md)               | Point your domain at the LB IP             | ~15 min  | A record at GoDaddy; chart's IngressRoute updated for multi-host (hostname + IP); app reachable by domain         |
 | **6** | (next) Monitoring + logging                          | Observability stack                        | TBD      | kube-prometheus-stack + Loki/Promtail, ServiceMonitors, Grafana dashboards                                         |
 | **7** | (next) HTTPS via cert-manager + Let's Encrypt        | Real TLS on the LB                         | TBD      | cert-manager, ClusterIssuer, Certificate, Traefik routes serving `https://`                                        |
 
