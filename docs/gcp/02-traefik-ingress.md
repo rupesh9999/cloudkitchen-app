@@ -190,28 +190,53 @@ The IP that GKE assigns to a `LoadBalancer` Service is **ephemeral** by
 default — if you ever delete and recreate the Traefik Service, GKE picks a
 new IP and your DNS goes stale.
 
-To **promote it to a static IP** so DNS records survive:
+To **promote the current ephemeral IP to a static reservation** so DNS
+records survive:
 
 ```bash
-# Reserve a static IP in the same region as the cluster
+# 1. Grab the IP Traefik already has. This is the IP we want to keep —
+#    NOT a brand-new one from GCP's pool.
+LB_IP=$(kubectl -n traefik get svc traefik \
+  -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+echo "Current Traefik IP: ${LB_IP}"
+
+# 2. Reserve it as a static address. The `--addresses=${LB_IP}` flag is
+#    CRITICAL — it tells GCP "promote THIS specific IP to static". Without
+#    that flag, GCP creates a brand-new random IP from the pool and your
+#    existing LoadBalancer keeps using the old ephemeral one — see the
+#    "doesn't bind" trap below.
 gcloud compute addresses create traefik-lb-ip \
+  --addresses="${LB_IP}" \
   --region=us-central1 \
   --project=<your-project-id>
 
-# Get the IP value
+# 3. Verify the address flipped to IN_USE
 gcloud compute addresses describe traefik-lb-ip \
   --region=us-central1 \
-  --format='value(address)'
+  --format='table(name,address,status)'
+# Expect:  traefik-lb-ip  <LB_IP>  IN_USE
 
-# Pin the Traefik Service to it (helm upgrade keeps everything else)
+# 4. Pin the Traefik Service spec to it (so a Service recreate would
+#    re-claim the same IP instead of picking a new ephemeral one)
 helm upgrade traefik traefik/traefik \
   --namespace traefik --reuse-values \
-  --set service.loadBalancerIP=<that-address>
+  --set service.loadBalancerIP="${LB_IP}"
 ```
 
-This is optional. The cluster we set up still uses the auto-assigned IP
-(`35.224.38.103`) and it survives chart upgrades; it would only change if we
-deleted and recreated the Service from scratch.
+> ⚠️ **The "doesn't bind" trap** — if you ran `gcloud compute addresses
+> create` **without** `--addresses=${LB_IP}`, GCP gave you a brand-new
+> random IP (not the one Traefik is using). Then `helm upgrade --set
+> service.loadBalancerIP=<new-random-ip>` silently no-ops because **GKE
+> cannot reassign an existing LoadBalancer to a different reserved IP**
+> via a spec change — the Service is already bound to its current IP.
+> Fix: `gcloud compute addresses delete traefik-lb-ip` to release the
+> wrong reservation, then re-run the block above with the `--addresses=`
+> flag set to the IP Traefik actually has.
+
+This step is optional but strongly recommended. Without it, anything that
+recreates the Service (e.g. `helm uninstall traefik`, a chart-level
+rewrite, a Service deletion by mistake) gives you a new IP, breaking the
+GoDaddy A record set in Phase 5.
 
 ---
 
