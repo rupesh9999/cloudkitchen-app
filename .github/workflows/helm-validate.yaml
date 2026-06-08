@@ -1,0 +1,90 @@
+# =============================================================================
+# Helm chart validate — fast feedback on chart edits without rebuilding images.
+# -----------------------------------------------------------------------------
+# Companion to ci-gcp.yaml. That workflow watches service code and rebuilds
+# Docker images on every change. THIS workflow watches helm/cloudkitchen/**
+# and just validates the chart:
+#   1. helm lint            — chart structure, required fields, conventions
+#   2. helm template        — renders the chart against values.yaml; fails on
+#                              any Go-template or values-reference error
+#   3. kubeconform          — validates every rendered manifest against
+#                              Kubernetes schemas (with --ignore-missing-schemas
+#                              so Traefik CRDs etc. don't false-alarm)
+#
+# Runs in ~30 seconds. Never pushes images, never touches the cluster.
+# ArgoCD still does the actual deploy — this just catches breakages BEFORE
+# ArgoCD tries to apply something invalid.
+# =============================================================================
+name: Helm chart validate
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "helm/cloudkitchen/**"
+      - ".github/workflows/helm-validate.yaml"
+  pull_request:
+    paths:
+      - "helm/cloudkitchen/**"
+      - ".github/workflows/helm-validate.yaml"
+
+concurrency:
+  group: helm-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Lint + render + schema-check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.16.1
+
+      # ---- Step 1: helm lint ----
+      # Catches structural issues: missing Chart.yaml fields, deprecated APIs
+      # in the values schema, etc. Doesn't render templates.
+      - name: helm lint
+        run: helm lint helm/cloudkitchen
+
+      # ---- Step 2: helm template (render check) ----
+      # Renders every template with the values.yaml in the repo. Fails on:
+      #   - Go-template syntax errors
+      #   - references to .Values keys that don't exist
+      #   - bad YAML in the rendered output (helm catches some of this)
+      - name: helm template (render check)
+        id: render
+        run: |
+          set -e
+          helm template cloudkitchen helm/cloudkitchen > /tmp/rendered.yaml
+          n=$(grep -c '^---$' /tmp/rendered.yaml || true)
+          echo "  rendered $(wc -l < /tmp/rendered.yaml) lines, ~${n} documents"
+          # Peek at the rendered output so the run log is informative
+          head -20 /tmp/rendered.yaml
+
+      # ---- Step 3: kubeconform schema check ----
+      # Validates the RENDERED YAML against the upstream Kubernetes JSON
+      # schemas. --ignore-missing-schemas means Traefik CRDs (IngressRoute
+      # etc.) don't fail the check — schemas for those don't ship with k8s.
+      - name: Install kubeconform
+        run: |
+          set -e
+          VERSION=v0.6.7
+          curl -sL "https://github.com/yannh/kubeconform/releases/download/${VERSION}/kubeconform-linux-amd64.tar.gz" \
+            | tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: kubeconform schema check
+        run: |
+          kubeconform \
+            -strict \
+            -ignore-missing-schemas \
+            -summary \
+            /tmp/rendered.yaml
