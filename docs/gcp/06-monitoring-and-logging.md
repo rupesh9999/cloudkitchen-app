@@ -790,6 +790,13 @@ sum by (service) (rate(http_requests_total{namespace="cloudkitchen", status=~"5.
 Should be `0` or very low on a healthy cluster. Sudden non-zero values
 mean something started failing.
 
+> **If you see `Empty query result` / no rows** — that's the **healthy
+> state**. PromQL's `rate(...)` returns no series at all when no 5xx
+> response has been recorded in the last 5 minutes; summing over no
+> series gives an empty result. To force a row to fire for testing,
+> hit an invalid endpoint, e.g.
+> `curl -X POST http://vijaygiduthuri.in/api/auth/login -d 'bogus'`.
+
 ### Query 8 — Error percentage per service
 
 ```promql
@@ -800,6 +807,9 @@ clamp_min(sum by (service) (rate(http_requests_total{namespace="cloudkitchen"}[5
 
 5xx as a fraction of total. Values are 0–1 (multiply by 100 for percent).
 The `clamp_min` avoids divide-by-zero when a service has no traffic.
+
+> Same caveat as Query 7 — when there are no 5xx responses anywhere, the
+> numerator is empty and so is the result. **Empty result = no errors.**
 
 ### Query 9 — p95 latency per service (seconds)
 
@@ -882,8 +892,15 @@ ALERTS{alertstate="firing"}
 ```
 
 Same alerts shown in the Alertmanager UI, but as a Prometheus table.
-Should be empty on a healthy cluster. If you applied `prometheusrules.yaml`
-(Step 9), the 7 alert rules feed this.
+If you applied `prometheusrules.yaml` (Step 9), the 7 alert rules feed
+this view.
+
+> **You'll always see at least one alert here named `Watchdog`** — that's
+> the chart's built-in heartbeat alert. It's *designed* to always fire.
+> Alertmanager treats it as a liveness signal: if Watchdog stops firing,
+> something is wrong with your monitoring pipeline. So a healthy cluster
+> shows exactly **1** row here: `Watchdog`. Anything else firing is a
+> real signal.
 
 ### Query 18 — Recording rule we set up in Step 9
 
