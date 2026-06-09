@@ -38,7 +38,6 @@ Let's Encrypt fetches it to prove you control the domain, and emits a
         ┌──────────────────────────────────────────────────────┐
         │  cert-manager (cert-manager ns)                       │
         │   ┌─────────────────────────────────────────┐         │
-        │   │  ClusterIssuer "letsencrypt-staging"     │         │
         │   │  ClusterIssuer "letsencrypt-prod"        │         │
         │   └─────────────────────────────────────────┘         │
         │                       │                              │
@@ -186,53 +185,59 @@ kubectl -n cert-manager get pods
 
 ---
 
-## Step 2 — Apply the ClusterIssuers (staging + prod)
+## Step 2 — Apply the Let's Encrypt ClusterIssuer
 
-Both Issuers are defined in **one file** in the repo:
-[security/cert-manager/clusterissuer.yaml](../../security/cert-manager/clusterissuer.yaml).
+One ClusterIssuer, one apply.
 
-- `letsencrypt-staging` → Let's Encrypt **staging** API (not browser-trusted,
-  but no rate limits — use this until issuance works)
-- `letsencrypt-prod` → Let's Encrypt **production** API (real browser-trusted cert)
+**File:** [security/cert-manager/clusterissuer.yaml](../../security/cert-manager/clusterissuer.yaml).
+Uses Let's Encrypt's production API + the HTTP-01 challenge via Traefik.
 
-Both use the **HTTP-01** solver via the `traefik` IngressClass.
+### Set your email (one edit)
 
-### 2a — Set your email (required by Let's Encrypt for expiry notices)
+Let's Encrypt requires a real email so they can warn you before a cert
+expires. Open the file and change the `email:` field:
 
-```bash
-EMAIL="vijaygiduthuri67@gmail.com"   # 👈 use your real email
-sed -i "s/admin@cloudkitchen.example.com/${EMAIL}/g" \
-  security/cert-manager/clusterissuer.yaml
+```yaml
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: vijaygiduthuri67@gmail.com   # 👈 YOUR real email
 ```
 
-### 2b — Apply
+### Apply
 
 ```bash
 kubectl apply -f security/cert-manager/clusterissuer.yaml
 ```
 
-### 2c — Verify both are Ready
+### Verify
 
 ```bash
 kubectl get clusterissuer
-# NAME                  READY   AGE
-# letsencrypt-staging   True    30s
-# letsencrypt-prod      True    30s
+# NAME               READY   AGE
+# letsencrypt-prod   True    30s
 ```
 
-If they show `READY=False`, check the conditions:
+If `READY=False`, the most likely cause is cert-manager pods aren't ready
+yet (Step 1 wait). Re-run `kubectl -n cert-manager get pods` and confirm
+all 4 are Running, then check:
+
 ```bash
-kubectl describe clusterissuer letsencrypt-staging | tail -20
+kubectl describe clusterissuer letsencrypt-prod | tail -10
 ```
-Common cause: cert-manager pods not Ready yet (Step 1 wait).
 
 ---
 
-## Step 3 — Create the Certificate (start with STAGING)
+## Step 3 — Create the Certificate
 
-The repo ships [security/cert-manager/certificate.yaml](../../security/cert-manager/certificate.yaml)
-— but the defaults reference `cloudkitchen.example.com` and a subdomain
-list we don't need. Edit it to match your setup:
+One Certificate manifest, one apply, one wait.
+
+**File:** [security/cert-manager/certificate.yaml](../../security/cert-manager/certificate.yaml).
+
+### One edit — your domain
+
+The shipped file uses `cloudkitchen.example.com` as a placeholder.
+Replace it with your domain. The full block should look like:
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -241,15 +246,15 @@ metadata:
   name: cloudkitchen-tls
   namespace: cloudkitchen
 spec:
-  secretName: cloudkitchen-tls         # the Secret the chart will reference
-  duration: 2160h                       # 90 days
+  secretName: cloudkitchen-tls         # the Secret the chart will read
+  duration: 2160h                       # 90 days (Let's Encrypt default)
   renewBefore: 360h                     # renew 15 days before expiry
   privateKey:
     algorithm: ECDSA
     size: 256
     rotationPolicy: Always
   issuerRef:
-    name: letsencrypt-staging           # 👈 start with STAGING (no rate limits)
+    name: letsencrypt-prod              # the ClusterIssuer from Step 2
     kind: ClusterIssuer
     group: cert-manager.io
   commonName: vijaygiduthuri.in         # 👈 YOUR domain
@@ -257,47 +262,54 @@ spec:
     - vijaygiduthuri.in                 # 👈 YOUR domain
 ```
 
-The chart you wrote earlier ships a multi-domain example. Replace its
-`dnsNames:` block with just your single host and `commonName:` to match.
+### Apply
 
-Apply:
 ```bash
 kubectl apply -f security/cert-manager/certificate.yaml
 ```
 
-Watch:
-```bash
-kubectl -n cloudkitchen get certificate cloudkitchen-tls -w
-# Wait for READY=True. Typically <60s.
-
-# If it's stuck:
-kubectl -n cloudkitchen describe certificate cloudkitchen-tls | tail -30
-kubectl -n cloudkitchen get challenges            # the active HTTP-01 challenge
-```
-
-### Switch to PROD once staging works
-
-Once `READY=True` on staging, flip the issuer to **prod** so browsers
-trust the cert:
+### Wait + verify
 
 ```bash
-sed -i 's|letsencrypt-staging|letsencrypt-prod|' security/cert-manager/certificate.yaml
-kubectl apply -f security/cert-manager/certificate.yaml
-
-# cert-manager re-issues with the prod issuer (the old staging cert in the
-# Secret is replaced). Watch for READY=True again:
 kubectl -n cloudkitchen get certificate cloudkitchen-tls -w
+# Wait for READY=True. Typically 30-60 seconds.
 ```
 
-Verify the Secret now holds a prod cert:
+Verify it's a real Let's Encrypt cert (issuer `Let's Encrypt`, not anything
+else):
 
 ```bash
 kubectl -n cloudkitchen get secret cloudkitchen-tls \
-  -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -issuer
-# Issuer: C=US, O=Let's Encrypt, CN=R10        ← real prod cert
+  -o jsonpath='{.data.tls\.crt}' | base64 -d | openssl x509 -noout -issuer -dates
+# Expect:  issuer=C=US, O=Let's Encrypt, CN=YE1 (or R10/R11 — Let's Encrypt's intermediate CAs)
+#          notBefore=...    notAfter=...
 ```
 
-(Staging issuer would show `O=(STAGING) Let's Encrypt`.)
+### If issuance is stuck
+
+```bash
+# Look at the Certificate's status conditions:
+kubectl -n cloudkitchen describe certificate cloudkitchen-tls | tail -30
+
+# Look at the active HTTP-01 challenge:
+kubectl -n cloudkitchen get challenges
+kubectl -n cloudkitchen describe challenge <name> | tail -30
+
+# Most common cause: port 80 not reachable from the public internet so
+# Let's Encrypt can't fetch http://your-domain/.well-known/acme-challenge/...
+# Try it yourself:
+curl -v http://vijaygiduthuri.in/.well-known/acme-challenge/test
+# Expect: 404 (the challenge token doesn't exist yet — but the request reached Traefik).
+# Connection refused / timeout = port 80 blocked upstream.
+```
+
+> 💡 **Heads up on Let's Encrypt rate limits**
+> Let's Encrypt's production API limits you to **5 duplicate certificates
+> per week per registered domain**. For a single-host learning project
+> that's plenty — but if you're iterating and might hit it, you can switch
+> to their staging API temporarily by changing the issuer's `server:` URL
+> to `https://acme-staging-v02.api.letsencrypt.org/directory`. Staging is
+> unlimited but emits certs your browser won't trust.
 
 ---
 
@@ -612,8 +624,8 @@ for the challenge traffic only. Everything else still 308s to HTTPS.
 | Symptom | Likely cause | Fix |
 |---|---|---|
 | `Certificate` stuck `READY=False` for >5 min | Let's Encrypt HTTP-01 can't reach `http://vijaygiduthuri.in/.well-known/acme-challenge/…` | Confirm port 80 is open: `curl http://vijaygiduthuri.in/.well-known/acme-challenge/test` should return 404 (not "connection refused"). `kubectl get challenges -A` shows the exact URL Let's Encrypt is probing — curl it from your laptop. |
-| Browser shows "NET::ERR_CERT_AUTHORITY_INVALID" or warns | You actually have the staging cert | Edit `security/cert-manager/certificate.yaml` `issuerRef.name` from `letsencrypt-staging` → `letsencrypt-prod`, `kubectl apply`, wait. Verify with the `openssl x509 -noout -issuer` command above. |
-| Rate-limited by Let's Encrypt | You requested too many real certs (5/week/domain) | Stay on staging until everything works, then flip to prod **once**. The chart's `tls:` block keys off the Secret, not the cert source — staging vs prod is just `issuerRef`. |
+| Browser shows "NET::ERR_CERT_AUTHORITY_INVALID" or warns | Either the certificate isn't ready yet OR you're hitting Traefik via an IP without the matching `Host:` header (Traefik then serves a self-signed default cert) | Confirm `kubectl -n cloudkitchen get certificate cloudkitchen-tls` shows `READY=True`, and curl with the hostname (`curl https://vijaygiduthuri.in/`), not the IP. |
+| Rate-limited by Let's Encrypt (5 certs / week / domain) | You hit issuance failures in a loop or recreated the Certificate multiple times | Wait an hour (the rate window is rolling). Or temporarily point the Issuer's `server:` URL at the staging API (`https://acme-staging-v02.api.letsencrypt.org/directory`) while debugging — staging is unlimited but emits untrusted certs. |
 | `kubectl get challenges` shows the challenge stuck "pending" | cert-manager's HTTP-01 solver IngressRoute clashed with something | `kubectl -n cert-manager delete order --all` (forces a fresh attempt). If it keeps failing, check `kubectl -n cert-manager logs deploy/cert-manager` for the specific error. |
 | `/grafana` works but the page renders un-styled / blank | TLS secret not present in `monitoring` ns, or the IngressRoute still has `entryPoints: [web]` | Re-run Step 5a (duplicate Secret) + re-verify the edits in 5b landed: `kubectl -n monitoring get ingressroute grafana -o jsonpath='{.spec.entryPoints}'` should print `[websecure]`. |
 | `/argocd` returns "ERR_TOO_MANY_REDIRECTS" | ArgoCD's `server.insecure=true` got lost during a chart upgrade — it now tries to redirect from `/argocd` to `https://localhost/argocd` | `helm upgrade argocd argo/argo-cd -n argocd --reuse-values --set 'configs.params.server\.insecure=true' --set 'configs.params.server\.rootpath=/argocd'`, then `kubectl -n argocd rollout restart deploy argocd-server`. |
@@ -630,17 +642,16 @@ kubectl apply -f argocd/apps/app-cert-manager.yaml          # Option A
 # OR: helm install cert-manager jetstack/cert-manager -n cert-manager \
 #       --create-namespace --set crds.enabled=true --wait
 
-# 2. ClusterIssuers (set your email first)
-sed -i "s/admin@cloudkitchen.example.com/YOUR_EMAIL/g" security/cert-manager/clusterissuer.yaml
+# 2. ClusterIssuer  (one only — letsencrypt-prod)
+#    Edit the email: in security/cert-manager/clusterissuer.yaml -> spec.acme.email
 kubectl apply -f security/cert-manager/clusterissuer.yaml
+kubectl get clusterissuer letsencrypt-prod                  # wait READY=True
 
-# 3. Certificate (start staging, then prod)
-# Edit security/cert-manager/certificate.yaml: commonName + dnsNames = your domain
+# 3. Certificate  (single shot via the prod issuer)
+#    Edit commonName + dnsNames in security/cert-manager/certificate.yaml
+#    to YOUR domain.
 kubectl apply -f security/cert-manager/certificate.yaml
 kubectl -n cloudkitchen get cert cloudkitchen-tls -w        # wait READY=True
-sed -i 's|letsencrypt-staging|letsencrypt-prod|' security/cert-manager/certificate.yaml
-kubectl apply -f security/cert-manager/certificate.yaml
-kubectl -n cloudkitchen get cert cloudkitchen-tls -w        # wait READY=True again
 
 # 4. Flip the chart to HTTPS
 sed -i 's/tls: false/tls: true/' helm/cloudkitchen/values.yaml
@@ -672,7 +683,7 @@ done
 
 ## 🎉 What you accomplished
 
-- ✅ **cert-manager** running with staging + prod Let's Encrypt issuers
+- ✅ **cert-manager** running with the Let's Encrypt production issuer
 - ✅ A real **browser-trusted TLS certificate** in the cluster, auto-renewing every 75 days
 - ✅ Chart flipped to HTTPS via the existing `ingress.tls` toggle — no chart-template edits needed
 - ✅ **All 5 UIs** (app, ArgoCD, Grafana, Prometheus, Alertmanager) reachable under the **same domain** over HTTPS

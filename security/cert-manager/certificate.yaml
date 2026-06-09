@@ -1,11 +1,15 @@
-# certificate.yaml
-# -----------------------------------------------------------------------------
-# TLS certificate for the CloudKitchen public domain. cert-manager will obtain
-# and renew it via the referenced ClusterIssuer and store the result in the
-# `cloudkitchen-tls` Secret, which the Traefik IngressRoute / Ingress references.
+# =============================================================================
+# TLS certificate for vijaygiduthuri.in.
 #
-# Switch issuerRef.name to `letsencrypt-prod` once staging issuance succeeds.
-# -----------------------------------------------------------------------------
+# cert-manager obtains a real Let's Encrypt certificate via the
+# letsencrypt-prod ClusterIssuer (HTTP-01 challenge through Traefik) and
+# stores it in the `cloudkitchen-tls` Secret. The Traefik IngressRoute
+# (rendered by helm/cloudkitchen, with ingress.tls=true) references this
+# Secret. cert-manager auto-renews 15 days before expiry.
+#
+# Apply with:
+#   kubectl apply -f security/cert-manager/certificate.yaml
+# =============================================================================
 apiVersion: cert-manager.io/v1
 kind: Certificate
 metadata:
