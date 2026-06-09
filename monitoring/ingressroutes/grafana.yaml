@@ -1,15 +1,6 @@
-# =============================================================================
-# Traefik IngressRoute exposing Grafana at  http://<host>/grafana/
-# Backend: monitoring-grafana:80 (Service installed by kube-prometheus-stack).
-#
-# Replace the two host values to match your deployment:
-#   - Host(`vijaygiduthuri.in`)    -> your DNS name
-#   - Host(`35.224.38.103`)         -> your Traefik LB IP
-#                                       (kubectl -n traefik get svc traefik)
-#
-# Apply:
-#   kubectl apply -f monitoring/ingressroutes/grafana.yaml
-# =============================================================================
+# Edited in Phase 7 — flipped from HTTP (web) to HTTPS (websecure) with the
+# cloudkitchen-tls Secret duplicated into this namespace (cert-manager only
+# refreshes the original in cloudkitchen ns; re-duplicate after renewal).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -19,10 +10,12 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false
 spec:
   entryPoints:
-    - web
+  - websecure
   routes:
-    - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/grafana`)
-      kind: Rule
-      services:
-        - name: monitoring-grafana
-          port: 80
+  - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/grafana`)
+    kind: Rule
+    services:
+    - name: monitoring-grafana
+      port: 80
+  tls:
+    secretName: cloudkitchen-tls

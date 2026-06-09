@@ -1,16 +1,6 @@
-# =============================================================================
-# Traefik IngressRoute exposing Prometheus at  http://<host>/prometheus/
-# Backend: kube-prometheus-prometheus:9090
-#
-# Note: the Prometheus chart values set
-#   prometheus.prometheusSpec.routePrefix: /prometheus
-#   prometheus.prometheusSpec.externalUrl: http://vijaygiduthuri.in/prometheus
-# so Prometheus's internal redirects + alert links are /prometheus-prefixed.
-# Don't add StripPrefix here.
-#
-# Apply:
-#   kubectl apply -f monitoring/ingressroutes/prometheus.yaml
-# =============================================================================
+# Edited in Phase 7 — flipped from HTTP (web) to HTTPS (websecure) with the
+# cloudkitchen-tls Secret duplicated into this namespace (cert-manager only
+# refreshes the original in cloudkitchen ns; re-duplicate after renewal).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -20,10 +10,12 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false
 spec:
   entryPoints:
-    - web
+  - websecure
   routes:
-    - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/prometheus`)
-      kind: Rule
-      services:
-        - name: kube-prometheus-prometheus
-          port: 9090
+  - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/prometheus`)
+    kind: Rule
+    services:
+    - name: kube-prometheus-prometheus
+      port: 9090
+  tls:
+    secretName: cloudkitchen-tls

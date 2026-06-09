@@ -1,14 +1,6 @@
-# =============================================================================
-# Traefik IngressRoute exposing Alertmanager at  http://<host>/alertmanager/
-# Backend: kube-prometheus-alertmanager:9093
-#
-# Note: alertmanager.alertmanagerSpec.routePrefix is /alertmanager in our
-# chart values (argocd/apps/app-monitoring.yaml). So Alertmanager itself
-# expects to be served at /alertmanager — don't add StripPrefix.
-#
-# Apply:
-#   kubectl apply -f monitoring/ingressroutes/alertmanager.yaml
-# =============================================================================
+# Edited in Phase 7 — flipped from HTTP (web) to HTTPS (websecure) with the
+# cloudkitchen-tls Secret duplicated into this namespace (cert-manager only
+# refreshes the original in cloudkitchen ns; re-duplicate after renewal).
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -18,10 +10,12 @@ metadata:
     argocd.argoproj.io/sync-options: Prune=false
 spec:
   entryPoints:
-    - web
+  - websecure
   routes:
-    - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/alertmanager`)
-      kind: Rule
-      services:
-        - name: kube-prometheus-alertmanager
-          port: 9093
+  - match: (Host(`vijaygiduthuri.in`) || Host(`35.224.38.103`)) && PathPrefix(`/alertmanager`)
+    kind: Rule
+    services:
+    - name: kube-prometheus-alertmanager
+      port: 9093
+  tls:
+    secretName: cloudkitchen-tls
