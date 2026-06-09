@@ -20,11 +20,9 @@ spec:
     size: 256
     rotationPolicy: Always
   issuerRef:
-    name: letsencrypt-staging   # -> letsencrypt-prod for production
+    name: letsencrypt-prod   # -> letsencrypt-prod for production
     kind: ClusterIssuer
     group: cert-manager.io
-  commonName: cloudkitchen.example.com
+  commonName: vijaygiduthuri.in
   dnsNames:
-    - cloudkitchen.example.com
-    - www.cloudkitchen.example.com
-    - api.cloudkitchen.example.com
+    - vijaygiduthuri.in
