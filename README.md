@@ -30,45 +30,81 @@ production-style monitoring/logging/security.
 
 ```mermaid
 flowchart TB
+    %% ───────── Deploy chain (top) ─────────
+    dev([Developer])
+    gh[(GitHub Repo<br/>code + Helm chart)]
+    ci[GitHub Actions<br/>build · Trivy · push]
+    reg[(Container Registry<br/>ECR / GAR)]
+    tf[Terraform<br/>VPC + cluster + registry + IAM]
+
+    dev -->|git push| gh
+    gh -->|trigger| ci
+    ci -->|push images| reg
+    ci -.->|bump image tags| gh
+
+    %% ───────── External actors ─────────
     user([Browser / Mobile])
+    le[("Let's Encrypt ACME")]
 
-    subgraph edge[Edge]
-      traefik[Traefik Ingress + TLS]
+    %% ───────── Kubernetes cluster ─────────
+    subgraph cluster["Kubernetes cluster - EKS / GKE"]
+        direction TB
+
+        argo[ArgoCD<br/>App-of-Apps · renders Helm chart]
+
+        subgraph platform["Platform - ingress + TLS"]
+            traefik[Traefik Ingress<br/>:80 / :443]
+            cm[cert-manager]
+        end
+
+        subgraph ck["cloudkitchen namespace"]
+            fe[React Frontend]
+            svcs["8 Go microservices on :8080<br/>auth · user · restaurant · menu<br/>order · payment · delivery · notification"]
+            pg[(PostgreSQL)]
+            redis[(Redis)]
+            mq{{"NATS (JetStream)"}}
+        end
+
+        subgraph obs["Observability + Logging"]
+            prom["Prometheus + Grafana<br/>+ Alertmanager"]
+            loki["Loki + Promtail"]
+        end
+
+        %% GitOps sync — ArgoCD reconciles every layer from Git
+        argo -.->|syncs| platform
+        argo -.->|syncs| ck
+        argo -.->|syncs| obs
+
+        %% Runtime data plane
+        traefik --> fe
+        traefik --> svcs
+        svcs --> pg
+        svcs --> redis
+        svcs <--> mq
+        cm -->|TLS Secret| traefik
+
+        %% Observability fan-in
+        prom -.->|scrape /metrics| svcs
+        loki -.->|tail pod logs| svcs
     end
 
-    fe[React Frontend]
+    %% ───────── External wiring ─────────
+    tf -.->|creates| cluster
+    gh -.->|polls / webhook| argo
+    reg -.->|kubelet pulls| ck
 
-    subgraph svc[cloudkitchen namespace - Go services :8080]
-      auth[auth]
-      usr[user]
-      rest[restaurant]
-      menu[menu]
-      order[order]
-      pay[payment]
-      del[delivery]
-      notif[notification]
-    end
-
-    subgraph data[Backing services]
-      pg[(PostgreSQL)]
-      redis[(Redis)]
-      mq{{"NATS (JetStream)"}}
-    end
-
-    user --> traefik --> fe
-    traefik --> auth & usr & rest & menu & order & pay & del & notif
-
-    auth & usr & rest & menu & order & pay & del & notif --> pg
-    auth & order --> redis
-    auth & usr & rest & menu & order & pay & del & notif <--> mq
+    user -->|HTTPS| traefik
+    cm <-.->|HTTP-01 challenge| le
 ```
 
-- **Frontend**: React SPA served by nginx; talks to the services through Traefik.
-- **8 Go microservices** listen on `:8080`, each exposing `/metrics`, `/healthz`, `/readyz`, and structured JSON logs to stdout.
-- **Sync** communication is REST over HTTP. **Async** communication is event-driven over **NATS JetStream**.
-- **PostgreSQL** is the system of record; **Redis** handles sessions/caching; **NATS (JetStream)** is the event bus.
+- **Infrastructure (Terraform).** One `terraform apply` provisions the VPC, Kubernetes cluster (GKE or EKS), container registry (Artifact Registry or ECR), and IAM — see `gcp-terraform/` and `terraform/`.
+- **CI (GitHub Actions).** On every push to `main`: build all 9 Docker images in parallel, Trivy-scan them, push to the registry, and commit the new image tags back to `helm/cloudkitchen/values.yaml`.
+- **CD (ArgoCD + Helm).** ArgoCD watches the repo, renders the umbrella Helm chart with the new tags, and reconciles every platform App via the **App-of-Apps** pattern — the application, the ingress layer, the monitoring stack, and the logging stack.
+- **Ingress + TLS (Traefik + cert-manager).** Traefik serves traffic on `:80` / `:443`. cert-manager auto-renews a Let's Encrypt TLS certificate via the HTTP-01 challenge (renews every ~75 days).
+- **Data plane.** React frontend at `/`; 8 Go services under `/api/*` listening on `:8080`. **PostgreSQL** is the system of record; **Redis** handles sessions/caching; **NATS JetStream** is the async event bus.
+- **Observability.** Prometheus scrapes `/metrics` from every pod; Promtail tails container logs into Loki; Grafana queries both; Alertmanager handles fired alerts.
 
-See [`docs/architecture/PHASE-1.md`](docs/architecture/PHASE-1.md) for the full design — including the CI/CD pipeline diagram, GitOps flow, event catalog, and observability/security baseline.
+See [`docs/architecture/PHASE-1.md`](docs/architecture/PHASE-1.md) for the full design — event catalog, detailed CI/CD and GitOps diagrams, and the security baseline.
 
 ## Tech stack
 
