@@ -65,7 +65,7 @@ previous one.
 | **4** | [ArgoCD deploys the app](04-argocd-deploy.md)        | GitOps deployment from this repo           | ~15 min  | ArgoCD installed; UI under `/argocd`; the `cloudkitchen` Application Synced + Healthy; 12 pods Running             |
 | **5** | [DNS + GoDaddy](05-dns-and-godaddy.md)               | Point your domain at the LB IP             | ~15 min  | A record at GoDaddy; chart's IngressRoute updated for multi-host (hostname + IP); app reachable by domain         |
 | **6** | [Monitoring + logging](06-monitoring-and-logging.md)   | Observability stack                        | ~25 min  | kube-prometheus-stack + Loki/Promtail; ServiceMonitor; 8 per-service Grafana dashboards; PrometheusRule (recording + alerts) |
-| **7** | [HTTPS via cert-manager + Let's Encrypt](07-https-letsencrypt-and-routes.md) | Real TLS on the LB | ~15 min  | cert-manager + ClusterIssuers (staging + prod); Certificate; all 5 UIs (app + argocd + grafana + prometheus + alertmanager) served over HTTPS |
+| **7** | [HTTPS via cert-manager + Let's Encrypt](07-https-letsencrypt-and-routes.md) | Real TLS on the LB | ~15 min  | cert-manager + `letsencrypt-prod` ClusterIssuer; Certificate `cloudkitchen-tls`; HTTP→HTTPS catch-all redirect; all 5 UIs (app + argocd + grafana + prometheus + alertmanager) served over HTTPS |
 | **8** | [PostgreSQL database guide](08-postgresql-database-guide.md) | Query the 12 tables / 8 schemas after deploy | ~5 min   | _(reference — no new cluster resources)_ — `kubectl exec` cheatsheet, per-schema queries, dashboard one-liners, optional `port-forward` for DBeaver/TablePlus |
 
 ---

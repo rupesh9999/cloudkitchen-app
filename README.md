@@ -9,8 +9,8 @@
 [![License](https://img.shields.io/badge/license-Personal_&_Educational_Use-orange.svg)](LICENSE)
 
 > A cloud-native, event-driven **food-delivery platform** built as 8 Go
-> microservices plus a React frontend, deployed to **AWS EKS** via **GitOps**
-> with a full observability and security baseline.
+> microservices plus a React frontend, deployed to **AWS EKS or Google GKE**
+> via **GitOps** with a full observability and security baseline.
 
 CloudKitchen is a portfolio-grade reference platform demonstrating microservice
 design, async messaging, infrastructure-as-code, GitOps delivery, and
@@ -24,7 +24,7 @@ production-style monitoring/logging/security.
 - **React frontend** SPA served by nginx.
 - **Sync** comms over REST, **async** comms over NATS JetStream events.
 - Backed by **PostgreSQL**, **Redis**, and **NATS (JetStream)**.
-- Shipped to **EKS** (`us-east-1`) through **GitHub Actions -> ECR -> ArgoCD**.
+- Shipped to **EKS** (`us-east-1`) **or GKE** (`us-central1`) through **GitHub Actions → ECR / GAR → ArgoCD**.
 
 ## Architecture
 
@@ -145,12 +145,12 @@ See [`docs/architecture/PHASE-1.md`](docs/architecture/PHASE-1.md) for the full 
 | Cache / sessions | Redis 7 |
 | Messaging        | NATS 2.10 + JetStream (event bus) |
 | Containers       | Docker (per-service Dockerfiles) |
-| Orchestration    | Kubernetes (AWS EKS) |
+| Orchestration    | Kubernetes — **AWS EKS** (`us-east-1`) or **Google GKE** (`us-central1`) |
 | Ingress / TLS    | Traefik + cert-manager (Let's Encrypt) |
-| GitOps           | ArgoCD |
-| Packaging        | Helm |
-| IaC              | Terraform (VPC, EKS, ECR, IAM/IRSA) — `us-east-1` |
-| CI/CD            | GitHub Actions (matrix build, Trivy gate, ECR push, values bump) |
+| GitOps           | ArgoCD (App-of-Apps pattern) |
+| Packaging        | Helm (umbrella chart under `helm/cloudkitchen/`) |
+| IaC              | Terraform — `terraform/` for AWS (EKS, ECR, IAM/IRSA), `gcp-terraform/` for GCP (GKE, AR, IAM) |
+| CI/CD            | GitHub Actions (matrix build, Trivy gate, registry push, values bump) |
 | Metrics          | Prometheus (kube-prometheus-stack) + Grafana |
 | Logging          | Loki + Promtail |
 | Security scan    | Trivy (CI gate + optional trivy-operator) |
@@ -169,7 +169,8 @@ cloudkitchen-app/
 ├── notification/    # Go service — notifications
 ├── frontend/        # React SPA
 ├── helm/            # Helm chart(s)
-├── terraform/       # AWS infra (VPC, EKS, ECR, IAM/IRSA)
+├── terraform/       # AWS infra (VPC, EKS, ECR, IAM/IRSA) — us-east-1
+├── gcp-terraform/   # GCP infra (VPC, GKE, Artifact Registry, IAM) — us-central1
 ├── argocd/          # ArgoCD Applications (App-of-Apps)
 ├── monitoring/      # Prometheus + Grafana values & dashboards
 ├── logging/         # Loki + Promtail values
@@ -215,22 +216,24 @@ Full local instructions: [`docker/README.md`](docker/README.md).
 
 ```mermaid
 flowchart LR
-    tf[Terraform] --> eks[(EKS us-east-1)]
+    tf[Terraform] --> k8s[("Kubernetes cluster<br/>EKS (AWS) / GKE (GCP)")]
     push[git push] --> gha[GitHub Actions]
-    gha --> trivy[Trivy] --> ecr[(ECR)]
-    ecr --> bump[bump helm/cloudkitchen/values.yaml] --> commit[commit]
-    commit --> argo[ArgoCD auto-sync] --> eks
+    gha --> trivy[Trivy] --> reg[("Container Registry<br/>ECR / GAR")]
+    reg --> bump[bump helm/cloudkitchen/values.yaml] --> commit[commit]
+    commit --> argo[ArgoCD auto-sync] --> k8s
 ```
 
-1. **Provision** infrastructure with **Terraform** (VPC, EKS, ECR, IAM/IRSA) in
-   `us-east-1`.
+1. **Provision** infrastructure with **Terraform**. On AWS that's VPC + EKS +
+   ECR + IAM/IRSA in `us-east-1` (`terraform/`). On GCP that's VPC + GKE +
+   Artifact Registry + IAM in `us-central1` (`gcp-terraform/`).
 2. **Bootstrap** the cluster: namespaces, Traefik, cert-manager, ArgoCD,
    kube-prometheus-stack, Loki/Promtail.
-3. **CI** (GitHub Actions): matrix build per service -> **Trivy** scan ->
-   push to **ECR** -> bump image tags in `helm/cloudkitchen/values.yaml` ->
-   commit. **No `helm upgrade` in CI.**
+3. **CI** (GitHub Actions): matrix build per service → **Trivy** scan →
+   push to the container registry (**ECR** on AWS, **Artifact Registry** on
+   GCP) → bump image tags in `helm/cloudkitchen/values.yaml` → commit.
+   **No `helm upgrade` in CI.**
 4. **GitOps**: **ArgoCD** detects the committed change and **auto-syncs** the
-   Helm release to EKS.
+   Helm release to the Kubernetes cluster.
 
 See the area guides:
 [monitoring](monitoring/README.md) ·
