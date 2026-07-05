@@ -365,6 +365,44 @@ kubectl -n cloudkitchen get pods
 
 ---
 
+## Step 5b — Populate the demo restaurant catalogue (optional)
+
+At this point ArgoCD has deployed all 12 pods with **empty** databases.
+If you open the customer UI now you'll see a blank "No restaurants"
+screen — because no owner has registered anything yet.
+
+To skip the manual restaurant + menu registration flow and jump straight
+to browsing / ordering, apply the pre-built seed:
+
+```bash
+kubectl -n cloudkitchen cp scripts/seed-restaurants.sql postgres-0:/tmp/seed.sql
+kubectl -n cloudkitchen exec postgres-0 -- \
+  psql -U cloudkitchen -d cloudkitchen -f /tmp/seed.sql
+```
+
+Expected output at the bottom:
+
+```
+     tbl     | rows
+-------------+------
+ restaurants |   20
+ categories  |   41
+ menu_items  |   99
+(3 rows)
+```
+
+This inserts **20 restaurants across 7 Indian cities and ~99 menu items**,
+all owned by a synthetic "demo owner" UUID so any real user signups are
+untouched. The seed is **idempotent** — safe to re-run any time, it
+deletes prior demo data before re-inserting. Source:
+[scripts/seed-restaurants.sql](../../scripts/seed-restaurants.sql).
+
+**Skip this step** if you want to walk through the real restaurant-owner
+signup flow (Sign up → role: owner → register restaurant → add categories
+→ add menu items). The seed is purely a shortcut for demos + smoke tests.
+
+---
+
 ## Step 6 — Verify the GitOps loop end-to-end
 
 The full loop:
