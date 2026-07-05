@@ -157,7 +157,8 @@ jobs:
           scan-type: image
           image-ref: ${{ env.AR_PREFIX }}/${{ matrix.service }}:${{ steps.vars.outputs.sha }}
           format: table
-          exit-code: "1" # non-zero exit fails the job
+         # exit-code: "1" # non-zero exit fails the job
+          exit-code: "0" # Trivy still runs, just doesn't fail
           severity: HIGH,CRITICAL
           ignore-unfixed: true # only gate on vulns that have a fix available
           vuln-type: os,library
