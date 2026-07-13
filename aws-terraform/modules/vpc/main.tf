@@ -19,6 +19,7 @@ locals {
   cluster_shared_tag = {
     "kubernetes.io/cluster/${var.cluster_name}" = "shared"
   }
+  nat_count = var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)
 }
 
 # -----------------------------------------------------------------------------
@@ -107,7 +108,7 @@ data "aws_ami" "nat_al2023_arm64" {
 
 # Elastic IPs for the NAT Instances
 resource "aws_eip" "nat" {
-  count  = length(var.public_subnet_cidrs)
+  count  = local.nat_count
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -146,9 +147,9 @@ resource "aws_security_group" "nat" {
   })
 }
 
-# NAT Instances (One per Availability Zone for High Availability)
+# NAT Instances (One per Availability Zone or a Single Instance for Cost Savings)
 resource "aws_instance" "nat" {
-  count                       = length(var.public_subnet_cidrs)
+  count                       = local.nat_count
   ami                         = data.aws_ami.nat_al2023_arm64.id
   instance_type               = "t4g.micro" # ARM64, extremely cost-effective
   subnet_id                   = aws_subnet.public[count.index].id
@@ -160,6 +161,10 @@ resource "aws_instance" "nat" {
   # User data to configure IP forwarding and iptables MASQUERADE
   user_data = <<-EOF
               #!/bin/bash
+              # Configure IP forwarding and iptables masquerade on every boot
+              mkdir -p /var/lib/cloud/scripts/per-boot
+              cat <<'INNER_EOF' > /var/lib/cloud/scripts/per-boot/nat-setup.sh
+              #!/bin/bash
               # Enable IP forwarding
               echo 1 > /proc/sys/net/ipv4/ip_forward
               echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
@@ -168,12 +173,10 @@ resource "aws_instance" "nat" {
               # Configure iptables to masquerade traffic
               PRIMARY_INTERFACE=$(ip route show | grep default | awk '{print $5}')
               iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
+              INNER_EOF
 
-              # Persist rules (on AL2023)
-              dnf install -y iptables-services
-              systemctl enable iptables
-              systemctl start iptables
-              iptables-save > /etc/sysconfig/iptables
+              chmod +x /var/lib/cloud/scripts/per-boot/nat-setup.sh
+              /var/lib/cloud/scripts/per-boot/nat-setup.sh
               EOF
 
   # Encrypted gp3 root block device
@@ -190,7 +193,7 @@ resource "aws_instance" "nat" {
 
 # Associate Elastic IPs with the NAT instances
 resource "aws_eip_association" "nat" {
-  count         = length(var.public_subnet_cidrs)
+  count         = local.nat_count
   instance_id   = aws_instance.nat[count.index].id
   allocation_id = aws_eip.nat[count.index].id
 }
@@ -253,7 +256,7 @@ resource "aws_route" "private_nat" {
   count                  = length(aws_route_table.private)
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  instance_id            = aws_instance.nat[count.index].id
+  network_interface_id   = aws_instance.nat[var.single_nat_gateway ? 0 : count.index].primary_network_interface_id
 }
 
 resource "aws_route_table_association" "private" {

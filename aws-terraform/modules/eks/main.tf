@@ -78,6 +78,38 @@ resource "aws_iam_openid_connect_provider" "oidc" {
 }
 
 # -----------------------------------------------------------------------------
+# -----------------------------------------------------------------------------
+# Launch Template for Managed Node Group (to associate custom Security Groups)
+# -----------------------------------------------------------------------------
+resource "aws_launch_template" "this" {
+  name_prefix   = "${var.cluster_name}-node-lt-"
+  description   = "Launch template for EKS managed node group"
+
+  # Associate custom worker security group and cluster primary security group
+  vpc_security_group_ids = [
+    var.worker_sg_id,
+    aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
+  ]
+
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 2
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = merge(var.tags, {
+      Name = "${var.cluster_name}-node"
+    })
+  }
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
+# -----------------------------------------------------------------------------
 # Managed node group (workers in PRIVATE subnets)
 # -----------------------------------------------------------------------------
 resource "aws_eks_node_group" "this" {
@@ -91,6 +123,11 @@ resource "aws_eks_node_group" "this" {
   ami_type       = "AL2023_ARM_64_STANDARD"
   capacity_type  = var.node_capacity_type
   disk_size      = var.node_disk_size
+
+  launch_template {
+    id      = aws_launch_template.this.id
+    version = aws_launch_template.this.latest_version
+  }
 
   scaling_config {
     desired_size = var.node_desired_size

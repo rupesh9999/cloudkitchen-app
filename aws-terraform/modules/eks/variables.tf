@@ -38,6 +38,11 @@ variable "control_plane_sg_id" {
   type        = string
 }
 
+variable "worker_sg_id" {
+  description = "Security group ID for the EKS worker nodes (from security-groups module)."
+  type        = string
+}
+
 variable "endpoint_public_access" {
   description = "Whether the Kubernetes API server endpoint is publicly accessible."
   type        = bool

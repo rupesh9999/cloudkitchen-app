@@ -96,6 +96,7 @@ module "eks" {
   private_subnet_ids  = module.vpc.private_subnet_ids
   public_subnet_ids   = module.vpc.public_subnet_ids
   control_plane_sg_id = module.security_groups.control_plane_sg_id
+  worker_sg_id        = module.security_groups.workers_sg_id
 
   endpoint_public_access       = true
   endpoint_public_access_cidrs = var.endpoint_public_access_cidrs

@@ -14,3 +14,5 @@ service-account*.json
 **/terraform.tfstate
 **/terraform.tfstate.backup
 *.tfplan
+tfplan
+.terraform.lock.hcl
