@@ -10,7 +10,7 @@ variable "cluster_name" {
 variable "kubernetes_version" {
   description = "Kubernetes control plane version."
   type        = string
-  default     = "1.30"
+  default     = "1.35"
 }
 
 variable "cluster_role_arn" {
@@ -53,7 +53,7 @@ variable "endpoint_public_access_cidrs" {
 variable "node_instance_types" {
   description = "EC2 instance types for the managed node group."
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t4g.medium"]
 }
 
 variable "node_disk_size" {

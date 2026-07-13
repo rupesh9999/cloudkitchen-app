@@ -81,15 +81,33 @@ resource "aws_subnet" "private" {
 }
 
 # -----------------------------------------------------------------------------
-# NAT gateways
+# NAT Instances (ARM64 cost-saving alternative to NAT Gateways)
 # -----------------------------------------------------------------------------
-# A single NAT gateway is cheaper for dev/staging; per-AZ NAT gives HA for prod.
-locals {
-  nat_gateway_count = var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)
+
+# Dynamic lookup for the latest Amazon Linux 2023 ARM64 AMI
+data "aws_ami" "nat_al2023_arm64" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["al2023-ami-2023.*-kernel-*-arm64"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["arm64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 
+# Elastic IPs for the NAT Instances
 resource "aws_eip" "nat" {
-  count  = local.nat_gateway_count
+  count  = length(var.public_subnet_cidrs)
   domain = "vpc"
 
   tags = merge(var.tags, {
@@ -99,19 +117,102 @@ resource "aws_eip" "nat" {
   depends_on = [aws_internet_gateway.this]
 }
 
-resource "aws_nat_gateway" "this" {
-  count = local.nat_gateway_count
+# Security group for NAT instances
+resource "aws_security_group" "nat" {
+  name        = "${var.name_prefix}-nat-sg"
+  description = "Security group for NAT instances"
+  vpc_id      = aws_vpc.this.id
 
-  allocation_id = aws_eip.nat[count.index].id
-  # NAT gateways always live in public subnets.
-  subnet_id = aws_subnet.public[count.index].id
+  # Allow all outbound traffic to the internet
+  egress {
+    description = "Allow all outbound traffic to internet"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Allow all inbound traffic from VPC/private subnets
+  ingress {
+    description = "Allow inbound traffic from VPC CIDR"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-nat-sg"
+  })
+}
+
+# NAT Instances (One per Availability Zone for High Availability)
+resource "aws_instance" "nat" {
+  count                       = length(var.public_subnet_cidrs)
+  ami                         = data.aws_ami.nat_al2023_arm64.id
+  instance_type               = "t4g.micro" # ARM64, extremely cost-effective
+  subnet_id                   = aws_subnet.public[count.index].id
+  associate_public_ip_address = true
+  source_dest_check           = false # CRITICAL: allows the instance to forward traffic
+
+  vpc_security_group_ids = [aws_security_group.nat.id]
+
+  # User data to configure IP forwarding and iptables MASQUERADE
+  user_data = <<-EOF
+              #!/bin/bash
+              # Enable IP forwarding
+              echo 1 > /proc/sys/net/ipv4/ip_forward
+              echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
+              sysctl -p
+
+              # Configure iptables to masquerade traffic
+              PRIMARY_INTERFACE=$(ip route show | grep default | awk '{print $5}')
+              iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
+
+              # Persist rules (on AL2023)
+              dnf install -y iptables-services
+              systemctl enable iptables
+              systemctl start iptables
+              iptables-save > /etc/sysconfig/iptables
+              EOF
+
+  # Encrypted gp3 root block device
+  root_block_device {
+    encrypted   = true
+    volume_size = 8
+    volume_type = "gp3"
+  }
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-nat-${count.index}"
   })
-
-  depends_on = [aws_internet_gateway.this]
 }
+
+# Associate Elastic IPs with the NAT instances
+resource "aws_eip_association" "nat" {
+  count         = length(var.public_subnet_cidrs)
+  instance_id   = aws_instance.nat[count.index].id
+  allocation_id = aws_eip.nat[count.index].id
+}
+
+# Commented out managed NAT Gateway resources:
+# locals {
+#   nat_gateway_count = var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)
+# }
+#
+# resource "aws_nat_gateway" "this" {
+#   count = local.nat_gateway_count
+#
+#   allocation_id = aws_eip.nat[count.index].id
+#   # NAT gateways always live in public subnets.
+#   subnet_id = aws_subnet.public[count.index].id
+#
+#   tags = merge(var.tags, {
+#     Name = "${var.name_prefix}-nat-${count.index}"
+#   })
+#
+#   depends_on = [aws_internet_gateway.this]
+# }
 
 # -----------------------------------------------------------------------------
 # Public route table (one, shared by all public subnets)
@@ -152,8 +253,7 @@ resource "aws_route" "private_nat" {
   count                  = length(aws_route_table.private)
   route_table_id         = aws_route_table.private[count.index].id
   destination_cidr_block = "0.0.0.0/0"
-  # When single NAT gateway, all private RTs point at NAT 0; otherwise per-AZ.
-  nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.this[0].id : aws_nat_gateway.this[count.index].id
+  instance_id            = aws_instance.nat[count.index].id
 }
 
 resource "aws_route_table_association" "private" {

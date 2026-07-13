@@ -18,8 +18,8 @@ private_subnet_cidrs = ["10.10.48.0/20", "10.10.64.0/20", "10.10.80.0/20"]
 single_nat_gateway   = true # one NAT instead of three saves ~$60/month
 
 # --- EKS ---
-kubernetes_version  = "1.30"
-node_instance_types = ["t3.medium"]
+kubernetes_version  = "1.35"
+node_instance_types = ["t4g.medium"]
 node_desired_size   = 2
 node_min_size       = 2
 node_max_size       = 3
@@ -29,6 +29,6 @@ endpoint_public_access_cidrs = ["0.0.0.0/0"]
 bastion_allowed_cidrs        = ["0.0.0.0/0"]
 
 # --- bastion ---
-bastion_instance_type = "t3.micro"
+bastion_instance_type = "t4g.micro"
 # Set to an existing EC2 KeyPair name to enable SSH; leave empty to use SSM only.
 bastion_key_name = ""

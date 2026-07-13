@@ -64,13 +64,13 @@ variable "single_nat_gateway" {
 variable "kubernetes_version" {
   description = "EKS Kubernetes version."
   type        = string
-  default     = "1.30"
+  default     = "1.35"
 }
 
 variable "node_instance_types" {
   description = "Worker node instance types (managed node group)."
   type        = list(string)
-  default     = ["t3.medium"]
+  default     = ["t4g.medium"]
 }
 
 variable "node_desired_size" {
@@ -109,7 +109,7 @@ variable "bastion_allowed_cidrs" {
 variable "bastion_instance_type" {
   description = "EC2 instance type for the bastion."
   type        = string
-  default     = "t3.micro"
+  default     = "t4g.micro"
 }
 
 variable "bastion_key_name" {

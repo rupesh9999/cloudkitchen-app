@@ -20,7 +20,7 @@ variable "security_group_id" {
 variable "instance_type" {
   description = "EC2 instance type for the bastion host."
   type        = string
-  default     = "t3.micro"
+  default     = "t4g.micro"
 }
 
 variable "key_name" {
