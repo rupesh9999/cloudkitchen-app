@@ -42,15 +42,6 @@ terraform {
 }
 
 # AWS provider. Region comes from var.region (terraform.tfvars).
-# default_tags are applied to every resource that supports tagging.
 provider "aws" {
   region = var.region
-
-  default_tags {
-    tags = {
-      Project     = var.project
-      Environment = var.environment
-      ManagedBy   = "terraform"
-    }
-  }
 }

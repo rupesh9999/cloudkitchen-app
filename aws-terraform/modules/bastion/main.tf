@@ -127,7 +127,7 @@ resource "aws_instance" "bastion" {
     dnf update -y
     # Install kubectl and the AWS CLI v2 for cluster administration.
     dnf install -y awscli
-    curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+    curl -sLO "https://dl.k8s.io/release/$(curl -sL https://dl.k8s.io/release/stable.txt)/bin/linux/arm64/kubectl"
     install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
     rm -f kubectl
   EOF

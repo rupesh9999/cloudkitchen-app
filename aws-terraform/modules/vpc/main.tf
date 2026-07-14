@@ -160,24 +160,35 @@ resource "aws_instance" "nat" {
 
   # User data to configure IP forwarding and iptables MASQUERADE
   user_data = <<-EOF
-              #!/bin/bash
-              # Configure IP forwarding and iptables masquerade on every boot
-              mkdir -p /var/lib/cloud/scripts/per-boot
-              cat <<'INNER_EOF' > /var/lib/cloud/scripts/per-boot/nat-setup.sh
-              #!/bin/bash
-              # Enable IP forwarding
-              echo 1 > /proc/sys/net/ipv4/ip_forward
-              echo "net.ipv4.ip_forward = 1" >> /etc/sysctl.conf
-              sysctl -p
+    #!/bin/bash
+    set -ex
 
-              # Configure iptables to masquerade traffic
-              PRIMARY_INTERFACE=$(ip route show | grep default | awk '{print $5}')
-              iptables -t nat -A POSTROUTING -o $PRIMARY_INTERFACE -j MASQUERADE
-              INNER_EOF
+    # Enable IP forwarding (immediate + persistent)
+    sysctl -w net.ipv4.ip_forward=1
+    echo "net.ipv4.ip_forward = 1" > /etc/sysctl.d/99-nat.conf
 
-              chmod +x /var/lib/cloud/scripts/per-boot/nat-setup.sh
-              /var/lib/cloud/scripts/per-boot/nat-setup.sh
-              EOF
+    # Wait for default route to be available
+    for i in $(seq 1 30); do
+      PRIMARY_INTERFACE=$(ip -o -4 route show default | awk '{print $5}' | head -1)
+      [ -n "$PRIMARY_INTERFACE" ] && break
+      sleep 2
+    done
+
+    if [ -z "$PRIMARY_INTERFACE" ]; then
+      echo "ERROR: No default route found after 60s" >&2
+      exit 1
+    fi
+
+    echo "Configuring NAT masquerade on interface: $PRIMARY_INTERFACE"
+
+    # Flush any existing NAT rules and add masquerade
+    iptables -t nat -F POSTROUTING
+    iptables -t nat -A POSTROUTING -o "$PRIMARY_INTERFACE" -j MASQUERADE
+
+    # Verify the rule is active
+    iptables -t nat -L POSTROUTING -v -n
+    echo "NAT masquerade configured successfully"
+    EOF
 
   # Encrypted gp3 root block device
   root_block_device {
@@ -263,4 +274,88 @@ resource "aws_route_table_association" "private" {
   count          = length(aws_subnet.private)
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
+}
+
+# -----------------------------------------------------------------------------
+# VPC Endpoints — allow EKS worker nodes to bootstrap without NAT dependency
+# -----------------------------------------------------------------------------
+# Security group for interface VPC endpoints
+resource "aws_security_group" "vpc_endpoints" {
+  name        = "${var.name_prefix}-vpce-sg"
+  description = "Security group for VPC interface endpoints"
+  vpc_id      = aws_vpc.this.id
+
+  ingress {
+    description = "HTTPS from VPC"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-vpce-sg"
+  })
+}
+
+# S3 Gateway Endpoint (FREE — no hourly charges)
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.this.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = aws_route_table.private[*].id
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-s3-vpce"
+  })
+}
+
+# ECR API Interface Endpoint (image manifest lookups)
+resource "aws_vpc_endpoint" "ecr_api" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.region}.ecr.api"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-ecr-api-vpce"
+  })
+}
+
+# ECR Docker Interface Endpoint (image pulls)
+resource "aws_vpc_endpoint" "ecr_dkr" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.region}.ecr.dkr"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-ecr-dkr-vpce"
+  })
+}
+
+# STS Interface Endpoint (IAM authentication for EKS)
+resource "aws_vpc_endpoint" "sts" {
+  vpc_id              = aws_vpc.this.id
+  service_name        = "com.amazonaws.${var.region}.sts"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+  subnet_ids          = aws_subnet.private[*].id
+  security_group_ids  = [aws_security_group.vpc_endpoints.id]
+
+  tags = merge(var.tags, {
+    Name = "${var.name_prefix}-sts-vpce"
+  })
 }

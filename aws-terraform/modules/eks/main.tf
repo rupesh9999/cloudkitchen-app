@@ -78,7 +78,6 @@ resource "aws_iam_openid_connect_provider" "oidc" {
 }
 
 # -----------------------------------------------------------------------------
-# -----------------------------------------------------------------------------
 # Launch Template for Managed Node Group (to associate custom Security Groups)
 # -----------------------------------------------------------------------------
 resource "aws_launch_template" "this" {
@@ -90,6 +89,17 @@ resource "aws_launch_template" "this" {
     var.worker_sg_id,
     aws_eks_cluster.this.vpc_config[0].cluster_security_group_id
   ]
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = var.node_disk_size
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
 
   metadata_options {
     http_endpoint               = "enabled"
@@ -122,7 +132,6 @@ resource "aws_eks_node_group" "this" {
   instance_types = var.node_instance_types
   ami_type       = "AL2023_ARM_64_STANDARD"
   capacity_type  = var.node_capacity_type
-  disk_size      = var.node_disk_size
 
   launch_template {
     id      = aws_launch_template.this.id

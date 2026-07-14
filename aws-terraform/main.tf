@@ -60,6 +60,7 @@ module "vpc" {
 
   name_prefix          = local.name_prefix
   cluster_name         = local.cluster_name
+  region               = var.region
   vpc_cidr             = var.vpc_cidr
   azs                  = var.azs
   public_subnet_cidrs  = var.public_subnet_cidrs
