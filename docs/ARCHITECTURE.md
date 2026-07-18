@@ -283,6 +283,16 @@ Key bits:
 
 ## 7. The full architecture diagram
 
+### AWS Cloud Architecture (White Background)
+
+![CloudKitchen AWS Architecture Overview](./cloudkitchen_aws_architecture.png)
+
+### GCP Cloud Architecture (White Background)
+
+![CloudKitchen GCP Architecture Overview](./cloudkitchen_gcp_architecture.png)
+
+### Logical Topology (Mermaid)
+
 ```mermaid
 flowchart TB
     user([Browser / Mobile])
