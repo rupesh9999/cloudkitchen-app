@@ -56,8 +56,6 @@ resource "aws_security_group" "workers" {
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-workers-sg"
-    # Required so the AWS VPC CNI / cluster can discover the SG.
-    "kubernetes.io/cluster/${var.name_prefix}" = "owned"
   })
 }
 
