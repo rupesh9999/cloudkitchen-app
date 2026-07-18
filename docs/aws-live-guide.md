@@ -339,7 +339,7 @@ Modify the target Git repository in `argocd/root-application.yaml` to point to y
 
 ```bash
 # Update the repoURL inside the yaml before applying
-kubectl apply -f argocd/root-application.yaml
+kubectl apply -f argocd/root-app.yaml
 ```
 ArgoCD will automatically auto-discover the Helm charts, pull the built Docker images from ECR, and orchestrate all 12 microservice pods.
 

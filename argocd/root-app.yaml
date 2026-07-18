@@ -12,7 +12,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: cloudkitchen-root
-  namespace: argocd
+  namespace: argo
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -20,7 +20,7 @@ spec:
 
   source:
     # NOTE: Replace with your real Git repository URL.
-    repoURL: https://github.com/vijaygiduthuri/cloudkitchen-app.git # <-- REPLACE
+    repoURL: https://github.com/rupesh9999/cloudkitchen-app.git # <-- REPLACE
     targetRevision: main
     # Directory source: ArgoCD renders every manifest under argocd/apps as a
     # child Application (the App-of-Apps "fan out").
@@ -30,7 +30,7 @@ spec:
 
   destination:
     server: https://kubernetes.default.svc
-    namespace: argocd
+    namespace: argo
 
   syncPolicy:
     automated:

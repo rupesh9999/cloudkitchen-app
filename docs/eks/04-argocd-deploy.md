@@ -174,7 +174,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: cloudkitchen
-  namespace: argocd                    # AppProjects always live in the argocd ns
+  namespace: argo                   # AppProjects always live in the argocd ns
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -245,7 +245,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
   name: cloudkitchen
-  namespace: argocd
+  namespace: argo
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
