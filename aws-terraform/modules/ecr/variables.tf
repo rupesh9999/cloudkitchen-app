@@ -11,14 +11,14 @@ variable "services" {
   description = "List of microservice names; one ECR repository is created per service."
   type        = list(string)
   default = [
-    "auth",
-    "user",
-    "restaurant",
-    "menu",
-    "order",
-    "payment",
-    "delivery",
-    "notification",
+    "auth-service",
+    "user-service",
+    "restaurant-service",
+    "menu-service",
+    "order-service",
+    "payment-service",
+    "delivery-service",
+    "notification-service",
     "frontend",
   ]
 }

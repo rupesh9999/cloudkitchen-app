@@ -103,12 +103,14 @@ service:
 ports:
   web:
     port: 80
-    expose: true
+    expose:
+      default: true
     exposedPort: 80
     protocol: TCP
   websecure:
     port: 443
-    expose: true
+    expose:
+      default: true
     exposedPort: 443
     protocol: TCP
 
