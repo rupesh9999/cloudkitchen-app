@@ -460,10 +460,10 @@ helm repo update
 kubectl create namespace logging
 
 # Deploy Loki
-helm install loki grafana/loki -n logging --set loki.auth_enabled=false
+helm install loki grafana/loki -n logging -f logging/loki-values.yaml
 
 # Deploy Promtail to collect and stream logs
-helm install promtail grafana/promtail -n logging --set config.clients[0].url=http://loki-gateway.logging.svc.cluster.local/loki/api/v1/push
+helm install promtail grafana/promtail -n logging -f logging/promtail-values.yaml
 ```
 Add Loki as a Data Source in Grafana (`http://loki-gateway.logging.svc.cluster.local`) to begin querying microservice logs.
 
