@@ -169,7 +169,7 @@ jobs:
     name: update-gitops
     runs-on: ubuntu-latest
     needs: build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
 
     # Need write access to push the image-tag commit back to the repo.
     permissions:
