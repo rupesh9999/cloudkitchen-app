@@ -10,7 +10,7 @@ apiVersion: argoproj.io/v1alpha1
 kind: AppProject
 metadata:
   name: cloudkitchen
-  namespace: argocd # AppProjects always live in the argocd control-plane namespace
+  namespace: argo # AppProjects always live in the argocd control-plane namespace
   # Finalizer ensures child Applications are cleaned up before the project is removed.
   finalizers:
     - resources-finalizer.argocd.argoproj.io
@@ -22,7 +22,7 @@ spec:
   # NOTE: Replace the placeholder repoURL with your real Git repository URL.
   # ---------------------------------------------------------------------------
   sourceRepos:
-    - https://github.com/vijaygiduthuri/cloudkitchen-app.git # <-- REPLACE with real repo URL
+    - https://github.com/rupesh9999/cloudkitchen-app.git
     # Helm chart registries used by the platform add-on Applications:
     - https://helm.traefik.io/traefik
     - https://charts.jetstack.io
@@ -31,7 +31,7 @@ spec:
 
   # ---------------------------------------------------------------------------
   # Allowed deployment destinations (cluster + namespace).
-  # The 5 platform namespaces are whitelisted on the in-cluster API server.
+  # The platform namespaces are whitelisted on the in-cluster API server.
   # ---------------------------------------------------------------------------
   destinations:
     - server: https://kubernetes.default.svc
@@ -44,6 +44,8 @@ spec:
       namespace: ingress
     - server: https://kubernetes.default.svc
       namespace: argocd
+    - server: https://kubernetes.default.svc
+      namespace: argo
 
   # ---------------------------------------------------------------------------
   # Cluster-scoped resources ArgoCD is allowed to create (whitelist).
@@ -82,4 +84,4 @@ spec:
   # Allow Applications belonging to this project to be defined in the argocd ns
   # (required for the App-of-Apps pattern where child Apps are committed to git).
   sourceNamespaces:
-    - argocd
+    - argo
