@@ -57,8 +57,8 @@ env:
   AWS_REGION: us-east-1
   # ECR registry host: <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
   ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
-  # All images live under the cloudkitchen/ ECR namespace.
-  IMAGE_PREFIX: cloudkitchen
+  # All images live under the cloudkitchen-dev/ ECR namespace.
+  IMAGE_PREFIX: cloudkitchen-dev
 
 jobs:
   # ===========================================================================
