@@ -115,7 +115,7 @@ postgres:
   image: postgres:16-alpine
   port: 5432
   storage: 10Gi
-  storageClass: gp3 # AWS EBS StorageClass (provided by aws-ebs-csi-driver)
+  storageClass: gp3 # AWS EBS StorageClass
 redis:
   name: redis
   servicename: redis
