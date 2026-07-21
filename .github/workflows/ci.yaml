@@ -113,7 +113,10 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ---- 5. Set up Buildx (enables layer caching + reproducible builds) -----
+      # ---- 5. Set up QEMU & Buildx (enables multi-arch linux/amd64 + linux/arm64) ---
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -145,14 +148,14 @@ jobs:
           ignore-unfixed: true # only gate on vulns that have a fix available
           vuln-type: os,library
 
-      # ---- 8. Push to ECR — only after a clean scan, and only on main ---------
-      #         PRs build + scan (gate) but do NOT push images.
+      # ---- 8. Push to ECR — multi-arch (AMD64 + ARM64 for Graviton) ----------
       - name: Push image to ECR
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main'
         uses: docker/build-push-action@v6
         with:
           context: ./${{ matrix.service }}
           file: ./${{ matrix.service }}/Dockerfile
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_PREFIX }}/${{ matrix.service }}:${{ steps.vars.outputs.sha }}
