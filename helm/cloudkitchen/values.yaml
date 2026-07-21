@@ -146,13 +146,8 @@ ingress:
   #   tls: false + entryPoint: web        -> first-day deploy (Phase 4), no cert needed.
   #   tls: true  + entryPoint: websecure  -> HTTPS via cert-manager (Phase 7).
   tls: false
-  # Production hostname (the DNS name your users / domain point at).
-  host: vijaygiduthuri.in
-  # Traefik LoadBalancer IP — kept as a second host so curl-by-IP still
-  # works for debugging even after DNS is in place. Get it with:
-  #   kubectl -n traefik get svc traefik \
-  #     -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-  lbIP: 136.119.163.255
+  host: a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com
+  lbIP: a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com
   entryPoint: web
   tlsSecretName: cloudkitchen-tls
   clusterIssuer: letsencrypt-prod
