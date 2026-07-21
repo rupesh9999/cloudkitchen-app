@@ -19,32 +19,32 @@ name: CI (AWS / ECR)
 # Re-enable the `push`/`pull_request` triggers below once the AWS_*
 # secrets are configured and the ECR repos exist (Terraform Phase 1).
 on:
-  workflow_dispatch: {} # manual-only for now
-  # push:
-  #   branches: [main]
-  #   paths:
-  #     - "auth-service/**"
-  #     - "user-service/**"
-  #     - "restaurant-service/**"
-  #     - "menu-service/**"
-  #     - "order-service/**"
-  #     - "payment-service/**"
-  #     - "delivery-service/**"
-  #     - "notification-service/**"
-  #     - "frontend/**"
-  #     - ".github/workflows/ci.yaml"
-  # pull_request:
-  #   paths:
-  #     - "auth-service/**"
-  #     - "user-service/**"
-  #     - "restaurant-service/**"
-  #     - "menu-service/**"
-  #     - "order-service/**"
-  #     - "payment-service/**"
-  #     - "delivery-service/**"
-  #     - "notification-service/**"
-  #     - "frontend/**"
-  #     - ".github/workflows/ci.yaml"
+  workflow_dispatch: {}
+  push:
+    branches: [main]
+    paths:
+      - "auth-service/**"
+      - "user-service/**"
+      - "restaurant-service/**"
+      - "menu-service/**"
+      - "order-service/**"
+      - "payment-service/**"
+      - "delivery-service/**"
+      - "notification-service/**"
+      - "frontend/**"
+      - ".github/workflows/ci.yaml"
+  pull_request:
+    paths:
+      - "auth-service/**"
+      - "user-service/**"
+      - "restaurant-service/**"
+      - "menu-service/**"
+      - "order-service/**"
+      - "payment-service/**"
+      - "delivery-service/**"
+      - "notification-service/**"
+      - "frontend/**"
+      - ".github/workflows/ci.yaml"
 
 # Cancel superseded runs on the same ref to save CI minutes.
 concurrency:
