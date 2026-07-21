@@ -16,7 +16,7 @@ spec:
   entryPoints:
     - web
   routes:
-    - match: Host(`vijaygiduthuri.in`) && PathPrefix(`/alertmanager`)
+    - match: Host(`a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com`) && PathPrefix(`/alertmanager`)
       kind: Rule
       services:
         - name: kube-prometheus-alertmanager

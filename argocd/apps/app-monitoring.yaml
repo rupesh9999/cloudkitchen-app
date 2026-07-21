@@ -68,8 +68,8 @@ spec:
           # redirects, and login URLs all break.
           grafana.ini:
             server:
-              domain: vijaygiduthuri.in
-              root_url: "http://vijaygiduthuri.in/grafana/"
+              domain: a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com
+              root_url: "http://a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com/grafana/"
               serve_from_sub_path: true
           # Auto-add Loki as a datasource so log panels work out of the box.
           # (The default Prometheus datasource is added by the chart already.)
@@ -104,7 +104,7 @@ spec:
           prometheusSpec:
             retention: 15d
             routePrefix: /prometheus
-            externalUrl: http://vijaygiduthuri.in/prometheus
+            externalUrl: http://a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com/prometheus
             # Discover ServiceMonitors / PodMonitors across all namespaces
             # (so anything we drop in cloudkitchen ns gets scraped).
             serviceMonitorSelectorNilUsesHelmValues: false
@@ -131,7 +131,7 @@ spec:
           enabled: true
           alertmanagerSpec:
             routePrefix: /alertmanager
-            externalUrl: http://vijaygiduthuri.in/alertmanager
+            externalUrl: http://a3263741e4836462a93065a499721c91-7b38811c68251c4a.elb.us-east-1.amazonaws.com/alertmanager
             resources:
               requests:
                 cpu: 25m
