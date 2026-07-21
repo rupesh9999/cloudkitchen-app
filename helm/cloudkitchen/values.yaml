@@ -115,7 +115,7 @@ postgres:
   image: postgres:16-alpine
   port: 5432
   storage: 10Gi
-  storageClass: standard-rwo # GKE StorageClass (provided by GCE PD CSI driver)
+  storageClass: gp3 # AWS EBS StorageClass (provided by aws-ebs-csi-driver)
 redis:
   name: redis
   servicename: redis
@@ -128,7 +128,7 @@ nats:
   clientPort: 4222 # NATS client protocol
   monitorPort: 8222 # HTTP monitoring endpoint
   storage: 5Gi # JetStream file storage
-  storageClass: standard-rwo
+  storageClass: gp3
 # -----------------------------------------------------------------------------
 # Shared database connection (single DB "cloudkitchen", schema-per-service)
 # -----------------------------------------------------------------------------
